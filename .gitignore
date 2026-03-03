@@ -1,0 +1,23 @@
+# Python virtual environment
+.venv/
+
+# Raw audio data (large dataset)
+mpower_voice_data_flac-20260127T044147Z-3-012/
+
+# Generated segment outputs
+segments/
+
+# Metadata / data files
+final_selected.xlsx
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# OS files
+.DS_Store
+Thumbs.db
