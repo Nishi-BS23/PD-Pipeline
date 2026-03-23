@@ -32,7 +32,7 @@ HuBERT/plots/
 HuBERT/results/
 
 # External dependencies and large codebases
-external/
+external
 
 # Generated output files
 Arch.png
