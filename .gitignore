@@ -15,6 +15,30 @@ __pycache__/
 *.py[cod]
 *.pyo
 
+# Wav2Vec2 pipeline outputs
+Wav2Vec2/embeddings/
+Wav2Vec2/embeddings_aggregated/
+Wav2Vec2/metadata.csv
+Wav2Vec2/metadata_aggregated.csv
+Wav2Vec2/plots/
+Wav2Vec2/results/
+
+# HuBERT pipeline outputs
+HuBERT/embeddings/
+HuBERT/embeddings_aggregated/
+HuBERT/metadata.csv
+HuBERT/metadata_aggregated.csv
+HuBERT/plots/
+HuBERT/results/
+
+# External dependencies and large codebases
+external/
+
+# Generated output files
+Arch.png
+Report.pdf
+context.md
+
 # Jupyter checkpoints
 .ipynb_checkpoints/
 
