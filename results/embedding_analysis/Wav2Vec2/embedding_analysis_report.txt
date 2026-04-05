@@ -1,0 +1,29 @@
+1. Problem
+Detect Parkinson's Disease (PD) vs Healthy Control (HC) from voice using segmentation-first embeddings.
+
+2. Method
+Audio was segmented into early (0-3s), middle (3-7s), and late (7-10s). We analyzed precomputed Wav2Vec2 embeddings (mean [768], optional sequence [T,768]).
+
+3. Embedding Insight
+Segment embeddings show subject-level differences across 768 learned acoustic features.
+Best AUC view in this run: early.
+
+4. Temporal Insight (early -> late)
+DeltaF = late - early captures temporal progression/fatigue-like changes.
+Mean DeltaF norm (PD): 7.4961
+Mean DeltaF norm (HC): 7.3825
+
+5. Key Observations
+- Cosine distributions (early vs late) differ by cohort.
+- Segment-specific probes show informativeness varies by segment.
+- DeltaF provides a direct temporal change signal.
+
+6. Limitations
+- Subject-level class imbalance can bias some metrics.
+- PCA/t-SNE are visualization tools, not definitive evidence.
+- Results depend on current metadata filtering and available triplets.
+
+7. Next Steps
+- Add confidence intervals and statistical testing.
+- Extend with gated fusion + contrastive/classification joint training.
+- Compare Wav2Vec2 and HuBERT side-by-side under identical splits.
