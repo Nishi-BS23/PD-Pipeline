@@ -22,6 +22,7 @@ Wav2Vec2/metadata.csv
 Wav2Vec2/metadata_aggregated.csv
 Wav2Vec2/plots/
 Wav2Vec2/results/
+Wav2Vec2/embeddings_full/
 
 # HuBERT pipeline outputs
 HuBERT/embeddings/
@@ -30,7 +31,7 @@ HuBERT/metadata.csv
 HuBERT/metadata_aggregated.csv
 HuBERT/plots/
 HuBERT/results/
-
+HuBERT/embeddings_full/
 # External dependencies and large codebases
 external
 

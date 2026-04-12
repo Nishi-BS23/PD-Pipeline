@@ -39,7 +39,13 @@ class PretrainedHubertModel(nn.Module):
         )
         with torch.no_grad():
             outputs = self.model(input_values)
-        z = outputs.extract_features.squeeze(0).cpu().numpy()
+        # Some transformers versions do not expose `extract_features` on HubertModel output.
+        # Fallback to the model's convolutional feature extractor for z.
+        if hasattr(outputs, "extract_features") and outputs.extract_features is not None:
+            z = outputs.extract_features.squeeze(0).cpu().numpy()
+        else:
+            z_tensor = self.model.feature_extractor(input_values)
+            z = z_tensor.transpose(1, 2).squeeze(0).detach().cpu().numpy()
         c = outputs.last_hidden_state.squeeze(0).cpu().numpy()
         return z, c
 
