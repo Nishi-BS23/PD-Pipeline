@@ -86,12 +86,32 @@ def make_output_dir(mode: str) -> str:
     return out
 
 
-def load_embeddings(meta_path: str, label_col: str = "class") -> tuple[np.ndarray, np.ndarray]:
+def load_embeddings(
+    meta_path: str,
+    label_col: str = "class",
+    max_per_class: int | None = None,
+    seed: int = RANDOM_STATE,
+) -> tuple[np.ndarray, np.ndarray]:
     """Load mean-pooled embeddings and binary labels from a metadata CSV.
 
     Returns (X, y) where X is (N, D) float32 and y is (N,) int (PD=1, HC=0).
     """
     df = pd.read_csv(meta_path)
+
+    if max_per_class is not None:
+        # Balanced cap: take up to N samples from each class independently.
+        df = df.copy()
+        df[label_col] = df[label_col].astype(str).str.strip()
+        rng = np.random.default_rng(seed)
+        keep_parts = []
+        for cls_name in ["PD", "HC"]:
+            cls_df = df[df[label_col] == cls_name]
+            if len(cls_df) > max_per_class:
+                # Sample rows by index to keep output deterministic with seed.
+                idx = rng.choice(cls_df.index.to_numpy(), size=max_per_class, replace=False)
+                cls_df = cls_df.loc[np.sort(idx)]
+            keep_parts.append(cls_df)
+        df = pd.concat(keep_parts, ignore_index=True)
     emb_col = "embedding_path"
 
     X, y = [], []
@@ -116,7 +136,11 @@ def scale(X_train: np.ndarray, X_val: np.ndarray) -> tuple[np.ndarray, np.ndarra
 # Section 1: Data loading
 # ---------------------------------------------------------------------------
 
-def load_all_embeddings(mode: str) -> dict[str, tuple[np.ndarray, np.ndarray]]:
+def load_all_embeddings(
+    mode: str,
+    max_per_class: int | None = None,
+    seed: int = RANDOM_STATE,
+) -> dict[str, tuple[np.ndarray, np.ndarray]]:
     """Load embeddings for both models. Returns {model_name: (X, y)}."""
     meta_key = "full_meta" if mode == "full" else "segment_meta"
     data = {}
@@ -125,7 +149,7 @@ def load_all_embeddings(mode: str) -> dict[str, tuple[np.ndarray, np.ndarray]]:
         if not os.path.isfile(meta_path):
             print(f"WARNING: {meta_path} not found. Run {name}/pipeline.py --mode {mode} first.")
             continue
-        X, y = load_embeddings(meta_path)
+          X, y = load_embeddings(meta_path, max_per_class=max_per_class, seed=seed)
         print(f"  {name}: {X.shape[0]} samples, dim={X.shape[1]}, "
               f"PD={y.sum()}, HC={(y==0).sum()}")
         data[name] = (X, y)
@@ -560,6 +584,18 @@ def parse_args() -> argparse.Namespace:
                         help="Epochs for final model training after hparam search")
     parser.add_argument("--test-size", type=float, default=0.2,
                         help="Fraction of data held out for validation")
+    parser.add_argument(
+        "--max-per-class",
+        type=int,
+        default=0,
+        help="Balanced cap per class: N means use up to N PD and N HC samples (0 = no cap)",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=RANDOM_STATE,
+        help="Random seed used for capped class sampling",
+    )
     return parser.parse_args()
 
 
@@ -575,10 +611,13 @@ def main() -> None:
     print(f"  Output    : {out_dir}")
     print(f"  Trials    : {args.n_trials}")
     print(f"  Test size : {args.test_size}")
+    print(f"  Max/class : {args.max_per_class if args.max_per_class > 0 else 'all'}")
+    print(f"  Seed      : {args.seed}")
 
     # -- Section 1: load embeddings --
     print(f"\n[1/7] Loading embeddings...")
-    data = load_all_embeddings(args.mode)
+    max_per_class = args.max_per_class if args.max_per_class > 0 else None
+    data = load_all_embeddings(args.mode, max_per_class=max_per_class, seed=args.seed)
     if not data:
         print("ERROR: No embeddings loaded. Run pipeline.py first.")
         sys.exit(1)

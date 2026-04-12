@@ -97,6 +97,18 @@ def parse_args() -> argparse.Namespace:
                         help="GPU index (ignored if no CUDA)")
     parser.add_argument("--use-feat", action="store_true",
                         help="Use CNN features (z) instead of transformer output (c)")
+    parser.add_argument(
+        "--max-per-class",
+        type=int,
+        default=0,
+        help="Balanced cap per class: N means use up to N PD and N HC files (0 = no cap)",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed used when --max-per-class is set",
+    )
     return parser.parse_args()
 
 
@@ -107,6 +119,8 @@ def main() -> None:
     print(f"  HuBERT Embedding Pipeline  [mode={args.mode}]")
     print(f"{'='*60}")
     print(f"  Model : {MODEL_NAME}")
+    print(f"  Max/class : {args.max_per_class if args.max_per_class > 0 else 'all'}")
+    print(f"  Seed      : {args.seed}")
 
     if args.mode == "segment":
         writer = EmbeddingDatasetWriter(
@@ -115,6 +129,8 @@ def main() -> None:
             model_fname = MODEL_NAME,
             gpu         = args.gpu,
             use_feat    = args.use_feat,
+            max_per_class = args.max_per_class if args.max_per_class > 0 else None,
+            seed        = args.seed,
         )
         print(f"\n{writer}")
         writer.require_output_dirs()
@@ -144,6 +160,8 @@ def main() -> None:
             xlsx_path   = XLSX_PATH,
             gpu         = args.gpu,
             use_feat    = args.use_feat,
+            max_per_class = args.max_per_class if args.max_per_class > 0 else None,
+            seed        = args.seed,
         )
         print(f"\n{writer}")
         writer.require_output_dirs()

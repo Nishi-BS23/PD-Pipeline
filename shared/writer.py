@@ -10,6 +10,7 @@
 import csv
 import glob
 import os
+import random
 from abc import ABC, abstractmethod
 from typing import Optional
 
@@ -89,10 +90,13 @@ class EmbeddingDatasetWriter(BaseWriter):
     """
 
     def __init__(self, input_root: str, output_root: str, model_fname: str,  # L123
-                 gpu: int = 0, verbose: bool = True, use_feat: bool = False):
+                 gpu: int = 0, verbose: bool = True, use_feat: bool = False,
+                 max_per_class: Optional[int] = None, seed: int = 42):
         super().__init__(output_root, model_fname, gpu, verbose, use_feat)
         assert os.path.isdir(input_root), f"Not found: {input_root}"
         self.input_root = input_root
+        self.max_per_class = max_per_class
+        self.seed = seed
 
     def _input_fnames(self, cls: str, seg: str) -> list[str]:              # mirrors L189-191
         return sorted(glob.glob(os.path.join(self.input_root, cls, seg, "*.flac")))
@@ -107,9 +111,25 @@ class EmbeddingDatasetWriter(BaseWriter):
 
     def write_features(self) -> None:                                       # L196-214
         assert self._model is not None, "Call set_model() before write_features()"
+        rng = random.Random(self.seed)
+
         for cls in CLASSES:
+            selected_stems = None
+            if self.max_per_class and self.max_per_class > 0:
+                early_files = self._input_fnames(cls, "early")
+                stems = [os.path.splitext(os.path.basename(f))[0].removesuffix("_early")
+                         for f in early_files]
+                if len(stems) > self.max_per_class:
+                    stems = rng.sample(stems, self.max_per_class)
+                selected_stems = set(stems)
+
             for seg in SEGMENTS:
                 fnames  = self._input_fnames(cls, seg)
+                if selected_stems is not None:
+                    fnames = [
+                        f for f in fnames
+                        if os.path.splitext(os.path.basename(f))[0].removesuffix(f"_{seg}") in selected_stems
+                    ]
                 out_dir = self._output_dir(cls, seg)
                 skipped = 0
                 for fpath in self._progress(fnames, desc=f"{cls}/{seg}", unit="file"):
@@ -171,11 +191,15 @@ class FullAudioWriter(BaseWriter):
     def __init__(self, raw_roots: list[str], output_root: str, model_fname: str,
                  xlsx_path: str, gpu: int = 0, verbose: bool = True,
                  use_feat: bool = False,
-                 min_duration: float = MIN_DURATION_FULL):
+                 min_duration: float = MIN_DURATION_FULL,
+                 max_per_class: Optional[int] = None,
+                 seed: int = 42):
         super().__init__(output_root, model_fname, gpu, verbose, use_feat)
         self.raw_roots    = raw_roots
         self.xlsx_path    = xlsx_path
         self.min_duration = min_duration
+        self.max_per_class = max_per_class
+        self.seed = seed
 
     def require_output_dirs(self) -> None:
         for cls in CLASSES:
@@ -208,6 +232,9 @@ class FullAudioWriter(BaseWriter):
         print(f"  No cohort label   : {skipped_no_label}")
         print(f"  Too short (<{self.min_duration}s): {skipped_short}")
         for cls in CLASSES:
+            if self.max_per_class and self.max_per_class > 0 and len(by_class[cls]) > self.max_per_class:
+                rng = random.Random(self.seed)
+                by_class[cls] = sorted(rng.sample(by_class[cls], self.max_per_class))
             print(f"  {cls}              : {len(by_class[cls])} files")
         return by_class
 

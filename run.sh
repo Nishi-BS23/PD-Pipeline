@@ -23,9 +23,10 @@
 #     3. HuBERT embedding extraction
 #     4. Comparative analysis (dim reduction, DBSCAN, MLP, evaluation)
 #   full mode:
-#     1. Wav2Vec2 embedding extraction
-#     2. HuBERT embedding extraction
-#     3. Comparative analysis (dim reduction, DBSCAN, MLP, evaluation)
+#     1. Audio segmentation (raw FLAC -> segments/{PD,HC}/full)
+#     2. Wav2Vec2 embedding extraction
+#     3. HuBERT embedding extraction
+#     4. Comparative analysis (dim reduction, DBSCAN, MLP, evaluation)
 #
 # Optional flags (edit below):
 #   GPU         : GPU index for embedding extraction (set to "" for CPU)
@@ -38,6 +39,8 @@ MODE="full"        # 'full' or 'segment'
 GPU=0              # GPU index; set to "" to force CPU
 N_TRIALS=20
 FINAL_EPOCHS=100
+MAX_PER_CLASS=0    # 0 means no cap; N means PD=N and HC=N across full flow
+SEED=42
 # -----------------------------------------------------------------------------
 
 set -euo pipefail
@@ -52,6 +55,8 @@ echo "  MODE         = $MODE"
 echo "  GPU          = ${GPU:-cpu}"
 echo "  N_TRIALS     = $N_TRIALS"
 echo "  FINAL_EPOCHS = $FINAL_EPOCHS"
+echo "  MAX_PER_CLASS= $MAX_PER_CLASS"
+echo "  SEED         = $SEED"
 echo "  Project root = $PROJECT_ROOT"
 echo "============================================================"
 
@@ -61,10 +66,7 @@ if [ -n "$GPU" ]; then
     GPU_FLAG="--gpu $GPU"
 fi
 
-TOTAL_STEPS=3
-if [ "$MODE" = "segment" ]; then
-    TOTAL_STEPS=4
-fi
+TOTAL_STEPS=4
 
 # ---------------------------------------------------------------------------
 # Step 1 (segment mode only) — Audio segmentation
@@ -72,55 +74,48 @@ fi
 if [ "$MODE" = "segment" ]; then
     echo ""
     echo "------------------------------------------------------------"
-    echo "[Step 1/$TOTAL_STEPS] Audio segmentation"
+    echo "[Step 1/$TOTAL_STEPS] Audio segmentation (mode=$MODE)"
     echo "------------------------------------------------------------"
-    python audio_segmentation.py
+    python audio_segmentation.py --mode segment --max-per-class "$MAX_PER_CLASS" --seed "$SEED"
+elif [ "$MODE" = "full" ]; then
+    echo ""
+    echo "------------------------------------------------------------"
+    echo "[Step 1/$TOTAL_STEPS] Audio segmentation (mode=$MODE)"
+    echo "------------------------------------------------------------"
+    python audio_segmentation.py --mode full --max-per-class "$MAX_PER_CLASS" --seed "$SEED"
 fi
 
 # ---------------------------------------------------------------------------
-# Step 1 — Wav2Vec2 embedding extraction
+# Step 2 — Wav2Vec2 embedding extraction
 # ---------------------------------------------------------------------------
 echo ""
 echo "------------------------------------------------------------"
-if [ "$MODE" = "segment" ]; then
-    STEP_LABEL="[Step 2/$TOTAL_STEPS]"
-else
-    STEP_LABEL="[Step 1/$TOTAL_STEPS]"
-fi
-echo "$STEP_LABEL Wav2Vec2 embedding extraction  (mode=$MODE)"
+echo "[Step 2/$TOTAL_STEPS] Wav2Vec2 embedding extraction  (mode=$MODE)"
 echo "------------------------------------------------------------"
-python Wav2Vec2/pipeline.py --mode "$MODE" $GPU_FLAG
+python Wav2Vec2/pipeline.py --mode "$MODE" $GPU_FLAG --max-per-class "$MAX_PER_CLASS" --seed "$SEED"
 
 # ---------------------------------------------------------------------------
-# Step 2 — HuBERT embedding extraction
+# Step 3 — HuBERT embedding extraction
 # ---------------------------------------------------------------------------
 echo ""
 echo "------------------------------------------------------------"
-if [ "$MODE" = "segment" ]; then
-    STEP_LABEL="[Step 3/$TOTAL_STEPS]"
-else
-    STEP_LABEL="[Step 2/$TOTAL_STEPS]"
-fi
-echo "$STEP_LABEL HuBERT embedding extraction  (mode=$MODE)"
+echo "[Step 3/$TOTAL_STEPS] HuBERT embedding extraction  (mode=$MODE)"
 echo "------------------------------------------------------------"
-python HuBERT/pipeline.py --mode "$MODE" $GPU_FLAG
+python HuBERT/pipeline.py --mode "$MODE" $GPU_FLAG --max-per-class "$MAX_PER_CLASS" --seed "$SEED"
 
 # ---------------------------------------------------------------------------
-# Step 3 — Comparative analysis
+# Step 4 — Comparative analysis
 # ---------------------------------------------------------------------------
 echo ""
 echo "------------------------------------------------------------"
-if [ "$MODE" = "segment" ]; then
-    STEP_LABEL="[Step 4/$TOTAL_STEPS]"
-else
-    STEP_LABEL="[Step 3/$TOTAL_STEPS]"
-fi
-echo "$STEP_LABEL Comparative analysis  (mode=$MODE)"
+echo "[Step 4/$TOTAL_STEPS] Comparative analysis  (mode=$MODE)"
 echo "------------------------------------------------------------"
 python comparative_analysis.py \
     --mode "$MODE" \
     --n-trials "$N_TRIALS" \
-    --final-epochs "$FINAL_EPOCHS"
+    --final-epochs "$FINAL_EPOCHS" \
+    --max-per-class "$MAX_PER_CLASS" \
+    --seed "$SEED"
 
 echo ""
 echo "============================================================"

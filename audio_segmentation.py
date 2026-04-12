@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import argparse
 import glob
-import os
+import random
 from pathlib import Path
 
 import soundfile as sf
@@ -23,16 +23,27 @@ import soundfile as sf
 from shared.cohort import assign_class_from_filename, find_raw_flac_files, load_cohort_map
 from shared.audio_utils import duration_seconds
 
-SEGMENTS = {
-    "early": (0.0, 3.0),
-    "middle": (3.0, 7.0),
-    "late": (7.0, 10.0),
+SEGMENTS_MODES = {
+    "segment": {
+        "early": (0.0, 3.0),
+        "middle": (3.0, 7.0),
+        "late": (7.0, 10.0),
+    },
+    "full": {
+        "full": (0.0, 10.0),
+    },
 }
 COHORTS = ["PD", "HC"]
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Segment raw FLAC into early/middle/late clips.")
+    parser = argparse.ArgumentParser(description="Segment raw FLAC into clips based on mode.")
+    parser.add_argument(
+        "--mode",
+        default="segment",
+        choices=["segment", "full"],
+        help="Segmentation mode: 'segment' creates early/middle/late, 'full' creates 0-10s full clip.",
+    )
     parser.add_argument(
         "--xlsx-path",
         default="final_selected.xlsx",
@@ -59,6 +70,18 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Overwrite existing segment files.",
     )
+    parser.add_argument(
+        "--max-per-class",
+        type=int,
+        default=0,
+        help="Balanced cap per class: N means use up to N PD and N HC files (0 = no cap).",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed used when --max-per-class is set.",
+    )
     return parser.parse_args()
 
 
@@ -75,9 +98,9 @@ def resolve_raw_roots(project_root: Path, raw_glob: str) -> list[str]:
     return resolved
 
 
-def ensure_output_dirs(output_root: Path) -> None:
+def ensure_output_dirs(output_root: Path, segments: dict) -> None:
     for cohort in COHORTS:
-        for seg_name in SEGMENTS:
+        for seg_name in segments:
             (output_root / cohort / seg_name).mkdir(parents=True, exist_ok=True)
 
 
@@ -101,20 +124,25 @@ def main() -> None:
             f"No raw audio roots found for pattern '{args.raw_glob}' under {project_root}"
         )
 
+    segments = SEGMENTS_MODES[args.mode]
+
     print("=" * 60)
-    print("Audio Segmentation (.py)")
+    print(f"Audio Segmentation (.py) — mode={args.mode}")
     print("=" * 60)
     print(f"Project root : {project_root}")
     print(f"Cohort file  : {xlsx_path}")
     print(f"Raw roots    : {raw_roots}")
     print(f"Output root  : {output_root}")
+    print(f"Segments     : {list(segments.keys())}")
     print(f"Min duration : {args.min_duration:.1f}s")
     print(f"Overwrite    : {args.overwrite}")
+    print(f"Max/class    : {args.max_per_class if args.max_per_class > 0 else 'all'}")
+    print(f"Seed         : {args.seed}")
 
     cohort_map = load_cohort_map(str(xlsx_path))
     all_flac_files = find_raw_flac_files(raw_roots)
 
-    ensure_output_dirs(output_root)
+    ensure_output_dirs(output_root, segments)
 
     cohort_files: dict[str, list[str]] = {"PD": [], "HC": []}
     unmatched_files = 0
@@ -144,6 +172,17 @@ def main() -> None:
     print(f"Valid PD files         : {len(cohort_files['PD'])}")
     print(f"Valid HC files         : {len(cohort_files['HC'])}")
 
+    if args.max_per_class > 0:
+        rng = random.Random(args.seed)
+        for cohort in COHORTS:
+            files = cohort_files[cohort]
+            if len(files) > args.max_per_class:
+                cohort_files[cohort] = sorted(rng.sample(files, args.max_per_class))
+
+        print("\nBalanced cap applied")
+        print(f"Selected PD files      : {len(cohort_files['PD'])}")
+        print(f"Selected HC files      : {len(cohort_files['HC'])}")
+
     saved_counts = {"PD": 0, "HC": 0}
     skipped_existing = 0
     failed_files = 0
@@ -158,7 +197,7 @@ def main() -> None:
 
             stem = Path(fpath).stem
             file_skipped = False
-            for seg_name, (start_s, end_s) in SEGMENTS.items():
+            for seg_name, (start_s, end_s) in segments.items():
                 start_sample = int(start_s * samplerate)
                 end_sample = int(end_s * samplerate)
                 segment_data = data[start_sample:end_sample]
@@ -182,7 +221,7 @@ def main() -> None:
             # If all files already existed, count as skipped-existing for transparency.
             if all(
                 (output_root / cohort / seg / f"{stem}_{seg}.flac").exists()
-                for seg in SEGMENTS
+                for seg in segments
             ) and not args.overwrite:
                 skipped_existing += 1
 
