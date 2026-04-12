@@ -149,7 +149,7 @@ def load_all_embeddings(
         if not os.path.isfile(meta_path):
             print(f"WARNING: {meta_path} not found. Run {name}/pipeline.py --mode {mode} first.")
             continue
-          X, y = load_embeddings(meta_path, max_per_class=max_per_class, seed=seed)
+        X, y = load_embeddings(meta_path, max_per_class=max_per_class, seed=seed)
         print(f"  {name}: {X.shape[0]} samples, dim={X.shape[1]}, "
               f"PD={y.sum()}, HC={(y==0).sum()}")
         data[name] = (X, y)
