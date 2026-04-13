@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import glob
 import random
+import time
 from pathlib import Path
 
 import soundfile as sf
@@ -148,6 +149,7 @@ def main() -> None:
 
     cohort_map = load_cohort_map(str(xlsx_path))
     all_flac_files = find_raw_flac_files(raw_roots)
+    print(f"Discovered FLAC files: {len(all_flac_files)}")
 
     ensure_output_dirs(output_root, segments)
 
@@ -156,7 +158,24 @@ def main() -> None:
     discarded_short = 0
     discarded_error = 0
 
-    for fpath in all_flac_files:
+    # For capped runs, scan in seeded random order and stop when both quotas are filled.
+    early_stop = args.max_per_class > 0
+    if early_stop:
+        rng_scan = random.Random(args.seed)
+        all_flac_files = list(all_flac_files)
+        rng_scan.shuffle(all_flac_files)
+
+    t0 = time.time()
+    log_every = 1000
+
+    for idx, fpath in enumerate(all_flac_files, start=1):
+        if idx % log_every == 0:
+            elapsed = time.time() - t0
+            print(
+                f"Scanned {idx}/{len(all_flac_files)} files "
+                f"(PD={len(cohort_files['PD'])}, HC={len(cohort_files['HC'])}, {elapsed:.1f}s)"
+            )
+
         cohort = assign_class_from_filename(fpath, cohort_map)
         if cohort not in COHORTS:
             unmatched_files += 1
@@ -170,6 +189,10 @@ def main() -> None:
             discarded_short += 1
             continue
         cohort_files[cohort].append(fpath)
+
+        if early_stop and len(cohort_files["PD"]) >= args.max_per_class and len(cohort_files["HC"]) >= args.max_per_class:
+            print(f"Reached class cap early at {idx} scanned files.")
+            break
 
     print("\nScan summary")
     print(f"Total FLAC files found : {len(all_flac_files)}")
