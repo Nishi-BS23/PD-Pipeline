@@ -146,7 +146,8 @@ def main() -> None:
     print(f"Overwrite    : {args.overwrite}")
     print(f"Max/class    : {args.max_per_class if args.max_per_class > 0 else 'all'}")
     print(f"Seed         : {args.seed}")
-
+    print(f"Seed         : {args.seed}")
+    
     cohort_map = load_cohort_map(str(xlsx_path))
     all_flac_files = find_raw_flac_files(raw_roots)
     print(f"Discovered FLAC files: {len(all_flac_files)}")
