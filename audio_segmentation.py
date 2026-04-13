@@ -146,7 +146,6 @@ def main() -> None:
     print(f"Overwrite    : {args.overwrite}")
     print(f"Max/class    : {args.max_per_class if args.max_per_class > 0 else 'all'}")
     print(f"Seed         : {args.seed}")
-    print(f"Seed         : {args.seed}")
     
     cohort_map = load_cohort_map(str(xlsx_path))
     all_flac_files = find_raw_flac_files(raw_roots)
@@ -181,6 +180,11 @@ def main() -> None:
         if cohort not in COHORTS:
             unmatched_files += 1
             continue
+
+        # Hard cap per class during scan: once PD/HC reaches N, skip adding more.
+        if early_stop and len(cohort_files[cohort]) >= args.max_per_class:
+            continue
+
         try:
             dur = duration_seconds(fpath)
         except Exception:
