@@ -88,12 +88,19 @@ def parse_args() -> argparse.Namespace:
 def resolve_raw_roots(project_root: Path, raw_glob: str) -> list[str]:
     roots = sorted(glob.glob(str(project_root / raw_glob)))
     resolved: list[str] = []
+
+    def safe_is_dir(path: Path) -> bool:
+        try:
+            return path.is_dir()
+        except OSError:
+            return False
+
     for root in roots:
         root_path = Path(root)
         nested = root_path / "mpower_voice_data_flac"
-        if nested.is_dir():
+        if safe_is_dir(nested):
             resolved.append(str(nested))
-        elif root_path.is_dir():
+        elif safe_is_dir(root_path):
             resolved.append(str(root_path))
     return resolved
 
