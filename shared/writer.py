@@ -11,6 +11,7 @@ import csv
 import glob
 import os
 import random
+import time
 from abc import ABC, abstractmethod
 from typing import Optional
 
@@ -213,24 +214,52 @@ class FullAudioWriter(BaseWriter):
         by_class: dict[str, list[str]] = {cls: [] for cls in CLASSES}
         skipped_no_label = 0
         skipped_short    = 0
+        skipped_error    = 0
 
-        for fpath in all_files:
+        early_stop = self.max_per_class is not None and self.max_per_class > 0
+        if early_stop:
+            rng = random.Random(self.seed)
+            all_files = list(all_files)
+            rng.shuffle(all_files)
+
+        t0 = time.time()
+        log_every = 1000
+
+        for idx, fpath in enumerate(all_files, start=1):
+            if idx % log_every == 0:
+                elapsed = time.time() - t0
+                print(
+                    f"  Scanned {idx}/{len(all_files)} "
+                    f"(PD={len(by_class['PD'])}, HC={len(by_class['HC'])}, {elapsed:.1f}s)"
+                )
+
             cls = assign_class_from_filename(fpath, cohort_map)
             if cls is None:
                 skipped_no_label += 1
                 continue
+
+            # Hard cap per class during scan for capped runs.
+            if early_stop and len(by_class[cls]) >= self.max_per_class:
+                continue
+
             try:
                 dur = duration_seconds(fpath)
             except Exception:
+                skipped_error += 1
                 continue
             if dur < self.min_duration:
                 skipped_short += 1
                 continue
             by_class[cls].append(fpath)
 
+            if early_stop and all(len(by_class[c]) >= self.max_per_class for c in CLASSES):
+                print(f"  Reached class cap early at {idx} scanned files.")
+                break
+
         print(f"  Raw files found   : {len(all_files)}")
         print(f"  No cohort label   : {skipped_no_label}")
         print(f"  Too short (<{self.min_duration}s): {skipped_short}")
+        print(f"  Read errors       : {skipped_error}")
         for cls in CLASSES:
             if self.max_per_class and self.max_per_class > 0 and len(by_class[cls]) > self.max_per_class:
                 rng = random.Random(self.seed)

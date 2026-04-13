@@ -104,14 +104,20 @@ def load_embeddings(
         df[label_col] = df[label_col].astype(str).str.strip()
         rng = np.random.default_rng(seed)
         keep_parts = []
+        capped_counts: dict[str, int] = {}
         for cls_name in ["PD", "HC"]:
             cls_df = df[df[label_col] == cls_name]
             if len(cls_df) > max_per_class:
                 # Sample rows by index to keep output deterministic with seed.
                 idx = rng.choice(cls_df.index.to_numpy(), size=max_per_class, replace=False)
                 cls_df = cls_df.loc[np.sort(idx)]
+            capped_counts[cls_name] = len(cls_df)
             keep_parts.append(cls_df)
         df = pd.concat(keep_parts, ignore_index=True)
+        print(
+            f"Applied max_per_class={max_per_class}: "
+            f"PD={capped_counts.get('PD', 0)}, HC={capped_counts.get('HC', 0)}"
+        )
     emb_col = "embedding_path"
 
     X, y = [], []
